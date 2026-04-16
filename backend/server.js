@@ -3,18 +3,19 @@ const sqlite3 = require("sqlite3").verbose();
 const cors = require("cors");
 const multer = require("multer");
 const path = require("path");
+const fs = require("fs");
+
 const app = express();
 app.use(express.json());
 app.use(cors());
-const fs = require("fs");
 
+// create uploads folder
 const uploadPath = path.join(__dirname, "uploads");
-
-// create folder only if not exists
 if (!fs.existsSync(uploadPath)) {
     fs.mkdirSync(uploadPath);
 }
 
+// multer setup
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
         cb(null, uploadPath);
@@ -24,8 +25,11 @@ const storage = multer.diskStorage({
     }
 });
 const upload = multer({ storage });
+
+// database
 const db = new sqlite3.Database("database.db");
 
+// users table
 db.run(`
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,6 +38,17 @@ CREATE TABLE IF NOT EXISTS users (
 )
 `);
 
+// products table
+db.run(`
+CREATE TABLE IF NOT EXISTS products (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT,
+    price INTEGER,
+    image TEXT
+)
+`);
+
+// REGISTER
 app.post("/register", (req, res) => {
     const { username, password } = req.body;
 
@@ -46,6 +61,7 @@ app.post("/register", (req, res) => {
     );
 });
 
+// LOGIN
 app.post("/login", (req, res) => {
     const { username, password } = req.body;
 
@@ -62,15 +78,32 @@ app.post("/login", (req, res) => {
     );
 });
 
+// ADD PRODUCT
+app.post("/add-product", upload.single("image"), (req, res) => {
+    const { name, price } = req.body;
+
+    let image = null;
+    if (req.file) {
+        image = req.file.filename;
+    }
+
+    db.run(
+        "INSERT INTO products (name, price, image) VALUES (?, ?, ?)",
+        [name, price, image],
+        () => {
+            res.send("Product added");
+        }
+    );
+});
+
+// GET PRODUCTS
 app.get("/products", (req, res) => {
     db.all("SELECT * FROM products", [], (err, rows) => {
         res.json(rows);
     });
 });
 
-app.listen(3000, () => {
-    console.log("Server running on port 3000");
-});
+// DELETE
 app.delete("/delete/:id", (req, res) => {
     const id = req.params.id;
 
@@ -80,3 +113,7 @@ app.delete("/delete/:id", (req, res) => {
 });
 
 app.use("/uploads", express.static("uploads"));
+
+app.listen(3000, () => {
+    console.log("Server running on port 3000");
+});
